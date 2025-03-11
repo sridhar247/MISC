@@ -7,13 +7,13 @@ for i in {1..7}; do
     SARFILE="/var/log/sa/sa$(date -d "$i days ago" +%d)"
 
     if [ -f "$SARFILE" ]; then
-        MEM_DATA=$(sar -r -f "$SARFILE" | awk 'NR>3 && $1 ~ /^[0-9]/ {print ($3/$2)*100}')
+        MEM_USAGE=$(sar -r -f "$SARFILE" | awk '/^[0-9]/ {printf "%.2f\n", ($3/$2)*100}')
 
-        MEM_AVG=$(echo "$MEM_DATA" | awk '{sum+=$1; cnt++} END {if(cnt>0) printf "%.2f", sum/cnt; else print "N/A"}')
-        MEM_MAX=$(echo "$MEM_DATA" | sort -nr | head -1 | xargs printf "%.2f")
-        MEM_MIN=$(echo "$MEM_DATA" | sort -n | head -1 | xargs printf "%.2f")
+        AVG_MEM=$(echo "$MEM_USAGE" | awk '{sum+=$1; count++} END {if(count>0) printf "%.2f", sum/count; else print "N/A"}')
+        MAX_MEM=$(echo "$MEM_USAGE" | sort -nr | head -1)
+        MIN_MEM=$(echo "$MEM_USAGE" | sort -n | head -1)
 
-        echo -e "$DATE\t$MEM_AVG%\t\t$MEM_MAX%\t\t$MEM_MIN%"
+        echo -e "$DATE\t$AVG_MEM%\t\t$MAX_MEM%\t\t$MIN_MEM%"
     else
         echo -e "$DATE\tNo Data\t\tNo Data\t\tNo Data"
     fi
