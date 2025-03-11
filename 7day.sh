@@ -1,70 +1,43 @@
 #!/bin/bash
+# Script to calculate max, min, and average CPU and Memory utilization for the past 7 days
 
-# Check if sysstat (SAR) is installed
-if ! command -v sar &> /dev/null; then
-    echo "Error: 'sar' command not found. Please install the sysstat package."
-    exit 1
-fi
+SA_DIR="/var/log/sa"
 
-# Initialize variables
-TOTAL_CPU=0
-MAX_CPU=0
-MIN_CPU=100
-TOTAL_MEM=0
-MAX_MEM=0
-MIN_MEM=100
-DAYS=0
+echo "Date        CPU Max(%)  CPU Min(%)  CPU Avg(%)  Mem Max(%)  Mem Min(%)  Mem Avg(%)"
+echo "--------------------------------------------------------------------------------"
 
-# Iterate through the last 7 days
-for i in {0..6}; do
-    LOG_FILE="/var/log/sa/sa$(date --date="$i days ago" +%d)"
-    
-    if [ -f "$LOG_FILE" ]; then
-        # Get CPU Usage (Subtract Idle CPU from 100)
-        CPU_VALUES=$(sar -u -f "$LOG_FILE" | awk '/^[0-9]/ {print 100 - $NF}')
-        for val in $CPU_VALUES; do
-            TOTAL_CPU=$(awk "BEGIN {print $TOTAL_CPU + $val}")
-            if (( $(echo "$val > $MAX_CPU" | bc -l) )); then MAX_CPU=$val; fi
-            if (( $(echo "$val < $MIN_CPU" | bc -l) )); then MIN_CPU=$val; fi
-        done
+# Loop over the past 7 days
+for i in {1..7}; do
+    DAY=$(date --date="$i day ago" +%d)   # Get day in two-digit format
+    DATE_LABEL=$(date --date="$i day ago" +%Y-%m-%d)  # Get readable date
+    SA_FILE="$SA_DIR/sa$DAY"
 
-        # Get Memory Usage (Used/Total * 100)
-        MEM_VALUES=$(sar -r -f "$LOG_FILE" | awk '/^[0-9]/ {print ($4/$2)*100}')
-        for val in $MEM_VALUES; do
-            TOTAL_MEM=$(awk "BEGIN {print $TOTAL_MEM + $val}")
-            if (( $(echo "$val > $MAX_MEM" | bc -l) )); then MAX_MEM=$val; fi
-            if (( $(echo "$val < $MIN_MEM" | bc -l) )); then MIN_MEM=$val; fi
-        done
+    if [ -f "$SA_FILE" ]; then
+        # Extract CPU utilization (100 - %idle)
+        CPU_DATA=$(sar -u -f "$SA_FILE" | awk 'NR>3 {print 100 - $NF}')
+        
+        # Extract Memory utilization (Used Memory = (kbmemused / kbmemtotal) * 100)
+        MEM_DATA=$(sar -r -f "$SA_FILE" | awk '$2 > 0 {print ($3 / $2) * 100}')
 
-        ((DAYS++))
+        # Validate that CPU and Memory data are not empty
+        if [ -n "$CPU_DATA" ] && [ -n "$MEM_DATA" ]; then
+            # Compute CPU statistics
+            CPU_MAX=$(echo "$CPU_DATA" | sort -nr | head -1)
+            CPU_MIN=$(echo "$CPU_DATA" | sort -n | head -1)
+            CPU_AVG=$(echo "$CPU_DATA" | awk '{sum+=$1} END {if (NR>0) print sum/NR}')
+
+            # Compute Memory statistics
+            MEM_MAX=$(echo "$MEM_DATA" | sort -nr | head -1)
+            MEM_MIN=$(echo "$MEM_DATA" | sort -n | head -1)
+            MEM_AVG=$(echo "$MEM_DATA" | awk '{sum+=$1; count+=1} END {if (count>0) print sum/count}')
+
+            # Display results
+            printf "%s  %.2f       %.2f       %.2f       %.2f       %.2f       %.2f\n" \
+                "$DATE_LABEL" "$CPU_MAX" "$CPU_MIN" "$CPU_AVG" "$MEM_MAX" "$MEM_MIN" "$MEM_AVG"
+        else
+            echo "$DATE_LABEL  No data available"
+        fi
+    else
+        echo "$DATE_LABEL  SAR file not found"
     fi
 done
-
-# Calculate Averages
-if [ $DAYS -gt 0 ]; then
-    AVG_CPU=$(awk "BEGIN {printf \"%.2f\", $TOTAL_CPU / (DAYS * 24)}")
-    AVG_MEM=$(awk "BEGIN {printf \"%.2f\", $TOTAL_MEM / (DAYS * 24)}")
-else
-    AVG_CPU="No data"
-    AVG_MEM="No data"
-fi
-
-# Get Current Disk Utilization (SAR does not log disk usage, using df instead)
-DISK_USAGE=$(df -h / | awk 'NR==2 {print $5}')
-
-# Print Results
-echo "--------------------------------------------"
-echo "📊 7-Day System Utilization Report"
-echo "--------------------------------------------"
-echo "🖥️  CPU Usage:"
-echo "     🔹 Average:  $AVG_CPU%"
-echo "     🔺 Highest:  $MAX_CPU%"
-echo "     🔻 Lowest:   $MIN_CPU%"
-echo ""
-echo "💾  Memory Usage:"
-echo "     🔹 Average:  $AVG_MEM%"
-echo "     🔺 Highest:  $MAX_MEM%"
-echo "     🔻 Lowest:   $MIN_MEM%"
-echo ""
-echo "📂  Disk Utilization (Current): $DISK_USAGE"
-echo "--------------------------------------------"
