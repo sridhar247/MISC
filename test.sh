@@ -1,57 +1,20 @@
 #!/bin/bash
-# This script collects CPU (User+System) and Memory utilization samples using SAR on RHEL8
-# and displays the average, minimum, and maximum values in a tabular format.
 
-# Check that sysstat (which provides sar) is installed
-if ! command -v sar &>/dev/null; then
-    echo "sar command not found. Please install the sysstat package."
-    exit 1
-fi
+echo -e "Date\t\tAvg CPU%\tMax CPU%\tMin CPU%"
 
-# Number of samples and interval (seconds)
-SAMPLES=10
-INTERVAL=1
+for i in {1..7}; do
+    DATE=$(date -d "$i days ago" +"%Y-%m-%d")
+    SARFILE="/var/log/sa/sa$(date -d "$i days ago" +%d)"
 
-# Collect CPU utilization samples using sar -u
-# We calculate CPU usage as (user + system).
-# Skip header lines and any 'Average' line at the end.
-cpu_samples=$(sar -u $INTERVAL $SAMPLES | awk 'NR>3 && $1 != "Average:" {print $3 + $5}')
-
-# Collect Memory utilization samples using sar -r
-# We assume the %memused is in the 4th column.
-mem_samples=$(sar -r $INTERVAL $SAMPLES | awk 'NR>3 && $1 != "Average:" {print $4}')
-
-# Function to calculate avg, min, and max from a list of numbers
-calculate_stats() {
-    local sum=0 count=0 min="" max=""
-    for val in $1; do
-        # Sum the values
-        sum=$(echo "$sum + $val" | bc -l)
-        count=$((count + 1))
-        # Set the initial min and max values if not already set
-        if [ -z "$min" ] || (( $(echo "$val < $min" | bc -l) )); then
-            min=$val
-        fi
-        if [ -z "$max" ] || (( $(echo "$val > $max" | bc -l) )); then
-            max=$val
-        fi
-    done
-
-    if [ $count -gt 0 ]; then
-        avg=$(echo "scale=2; $sum / $count" | bc -l)
+    if [ -f "$SARFILE" ]; then
+        CPU_DATA=$(sar -u -f "$SARFILE" | awk 'NR>3 && $1 ~ /^[0-9]/ {print 100 - $8}')
+        
+        CPU_AVG=$(echo "$CPU_DATA" | awk '{sum+=$1; cnt++} END {if(cnt>0) printf "%.2f", sum/cnt; else print "N/A"}')
+        CPU_MAX=$(echo "$CPU_DATA" | sort -nr | head -1)
+        CPU_MIN=$(echo "$CPU_DATA" | sort -n | head -1)
+        
+        echo -e "$DATE\t$CPU_AVG%\t\t$CPU_MAX%\t\t$CPU_MIN%"
     else
-        avg="N/A"
-        min="N/A"
-        max="N/A"
+        echo -e "$DATE\tNo Data\t\tNo Data\t\tNo Data"
     fi
-    echo "$avg $min $max"
-}
-
-# Calculate statistics for CPU and Memory
-read cpu_avg cpu_min cpu_max <<< $(calculate_stats "$cpu_samples")
-read mem_avg mem_min mem_max <<< $(calculate_stats "$mem_samples")
-
-# Print the results in tabular format
-echo -e "Metric\t\t\tAvg\tMin\tMax"
-echo -e "CPU (User+System)\t${cpu_avg}%\t${cpu_min}%\t${cpu_max}%"
-echo -e "Memory Utilization\t${mem_avg}%\t${mem_min}%\t${mem_max}%"
+done
