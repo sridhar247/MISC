@@ -9,17 +9,17 @@ echo "----------------------------------------------------------"
 # Loop over the past 7 days
 for i in {1..7}; do
     DAY=$(date --date="$i day ago" +%d)   # Get day in two-digit format
-    DATE_LABEL=$(date --date="$i day ago" +%Y-%m-%d)  # Get readable date
+    DATE_LABEL=$(date --date="$i day ago" +%Y-%m-%d")  # Get readable date
     SA_FILE="$SA_DIR/sa$DAY"
 
     if [ -f "$SA_FILE" ]; then
         # Extract CPU utilization (100 - %idle)
         CPU_DATA=$(sar -u -f "$SA_FILE" | awk 'NR>3 {print 100 - $NF}')
-        
-        # Extract Memory utilization (percentage used from sar -r, last column is %memused)
-        MEM_USED=$(sar -r -f "$SA_FILE" | awk 'NR>3 {print $NF}' | tail -1)
 
-        # Validate that CPU data is not empty
+        # Extract Memory Utilization: Compute Used Memory Percentage
+        MEM_USED=$(sar -r -f "$SA_FILE" | awk 'NR>3 && $2 > 0 {print ($3 / $2) * 100}' | tail -1)
+
+        # Validate that CPU and Memory data are not empty
         if [ -n "$CPU_DATA" ] && [ -n "$MEM_USED" ]; then
             # Compute CPU statistics
             CPU_MAX=$(echo "$CPU_DATA" | sort -nr | head -1)
