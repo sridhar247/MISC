@@ -21,7 +21,7 @@ for i in {1..7}; do
         # Use sar to display CPU stats from the log file.
         # The "Average:" line contains the summary for the day.
         # We assume the last field is %idle.
-        AVG_IDLE=$(sar -u -f "$SA_FILE" | awk '/^Average:/ {print $(NF)}')
+        AVG_IDLE=$(sar -u -f "$SA_FILE" | awk '/^Average:/ {print $(NF)}' | tail -n 1)
         
         if [ -z "$AVG_IDLE" ]; then
             echo "$DATE_LABEL  No data available"
