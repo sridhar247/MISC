@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script to calculate max, min, and average Memory utilization for the past 7 days
+# Script to calculate max, min, and average memory utilization (percentage) for the past 7 days
 
 SA_DIR="/var/log/sa"
 
@@ -13,8 +13,8 @@ for i in {1..7}; do
     SA_FILE="$SA_DIR/sa$DAY"
 
     if [ -f "$SA_FILE" ]; then
-        # Extract Memory utilization (Used Memory = (kbmemused / kbmemtotal) * 100)
-        MEM_DATA=$(sar -r -f "$SA_FILE" | awk '$2 > 0 {print ($3 / $2) * 100}')
+        # Extract Memory utilization directly from sar -r (percentage memory used is in last column)
+        MEM_DATA=$(sar -r -f "$SA_FILE" | awk 'NR>3 {print $(NF-1)}')
 
         # Validate Memory Data
         if [ -n "$MEM_DATA" ]; then
