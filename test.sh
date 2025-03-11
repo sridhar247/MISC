@@ -1,52 +1,55 @@
 #!/bin/bash
 
-# Daily System Utilization Report using SAR for the Last 7 Days on RHEL 8
-# Fetches Daily Average, Highest, and Lowest CPU (User+System) and Memory Utilization
+# System Utilization Report using SAR for the Last 7 Days on RHEL 8
+# Fetches Average CPU (User+System) and Memory Utilization per Day
 
-echo "Gathering daily system utilization data for the past 7 days..."
-echo "--------------------------------------------------------------"
+echo "============================================================="
+echo "📊 Daily System Utilization Report (Last 7 Days)"
+echo "============================================================="
 
-# Function to calculate min, max, and average per day
-calculate_stats() {
+# Function to calculate the average utilization from sar data
+calculate_average() {
     local data=("$@")
     local total=0
     local count=${#data[@]}
 
-    # Initialize min and max with the first element
-    local min=${data[0]}
-    local max=${data[0]}
+    if [[ $count -eq 0 ]]; then
+        echo "No data available."
+        return
+    fi
 
     for value in "${data[@]}"; do
         total=$(echo "$total + $value" | bc)
-        (( $(echo "$value < $min" | bc -l) )) && min=$value
-        (( $(echo "$value > $max" | bc -l) )) && max=$value
     done
 
     avg=$(echo "scale=2; $total / $count" | bc)
-    echo "Average: $avg%, Highest: $max%, Lowest: $min%"
+    echo "📊 Average Utilization: $avg%"
 }
 
-# Get the last 7 days
-for day in {1..7}; do
-    date=$(date --date="$day days ago" +%Y-%m-%d)
-    sar_file="/var/log/sa/sa$(date --date="$day days ago" +%d)"
+# Loop through the last 7 days
+for i in {1..7}; do
+    DATE=$(date --date="$i days ago" +%d)
+    SAR_FILE="/var/log/sa/sa$DATE"
 
-    if [ -f "$sar_file" ]; then
-        echo -e "\n📅 **Date: $date**"
-
-        # Collect CPU (User + System) Utilization
+    if [[ -f "$SAR_FILE" ]]; then
+        echo -e "\n📅 **Date: $(date --date="$i days ago" +'%Y-%m-%d')**"
+        echo "-------------------------------------------------------------"
+        
+        # Collect CPU Utilization (User + System)
         echo -e "\n🔹 **CPU Utilization (User + System) (%)**"
-        cpu_usage=($(sar -u -f "$sar_file" | awk '/^[0-9]/ {print $3 + $5}'))
-        calculate_stats "${cpu_usage[@]}"
+        cpu_usage=($(sar -u -f "$SAR_FILE" | awk '/^[0-9]/ {print $3 + $5}'))
+        calculate_average "${cpu_usage[@]}"
 
         # Collect Memory Utilization
         echo -e "\n🔹 **Memory Utilization (%)**"
-        memory_usage=($(sar -r -f "$sar_file" | awk '/^[0-9]/ {print ($3+$4)/($2+$3+$4) * 100}'))
-        calculate_stats "${memory_usage[@]}"
+        memory_usage=($(sar -r -f "$SAR_FILE" | awk '/^[0-9]/ {print ($3+$4)/($2+$3+$4) * 100}'))
+        calculate_average "${memory_usage[@]}"
 
+        echo "-------------------------------------------------------------"
     else
-        echo -e "\n📅 **Date: $date** - No SAR data available."
+        echo -e "\n📅 **Date: $(date --date="$i days ago" +'%Y-%m-%d')** - ❌ No SAR data available."
     fi
 done
 
-echo -e "\n✅ Daily Report Generated Successfully!"
+echo -e "\n✅ **Daily Report Generated Successfully!**"
+echo "============================================================="
