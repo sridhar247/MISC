@@ -1,65 +1,19 @@
 ---
-- name: Install and Configure Latest PostgreSQL on RHEL 8
-  hosts: all
-  become: yes
-  roles:
-    - postgresql
-
-
----
 pg_version: "15"
 pg_service: "postgresql-{{ pg_version }}"
 pg_data_dir: "/var/lib/pgsql/{{ pg_version }}/data"
 pg_setup_cmd: "/usr/pgsql-{{ pg_version }}/bin/postgresql-{{ pg_version }}-setup"
 pg_repo_rpm: "https://download.postgresql.org/pub/repos/yum/reporpms/EL-8-x86_64/pgdg-redhat-repo-latest.noarch.rpm"
+pg_gpg_key_url: "https://download.postgresql.org/pub/repos/yum/RPM-GPG-KEY-PGDG"
 
 
----
+
 - name: Install PGDG Repository RPM
   yum:
     name: "{{ pg_repo_rpm }}"
     state: present
 
-- name: Disable Built-in PostgreSQL Module
-  command: dnf -qy module disable postgresql
-  args:
-    warn: false
-
-- name: Install PostgreSQL Server Package
-  yum:
-    name: "postgresql{{ pg_version }}-server"
+- name: Import PGDG GPG key
+  rpm_key:
     state: present
-
-- name: Initialize PostgreSQL Database if Not Already Done
-  command: "{{ pg_setup_cmd }} initdb"
-  args:
-    creates: "{{ pg_data_dir }}/PG_VERSION"
-
-- name: Configure PostgreSQL to Listen on All Interfaces
-  lineinfile:
-    path: "{{ pg_data_dir }}/postgresql.conf"
-    regexp: '^#?listen_addresses'
-    line: "listen_addresses = '*'"
-  notify: restart postgresql
-
-- name: Allow Remote Connections in pg_hba.conf
-  lineinfile:
-    path: "{{ pg_data_dir }}/pg_hba.conf"
-    regexp: '^host\s+all\s+all\s+0\.0\.0\.0/0'
-    line: "host    all             all             0.0.0.0/0               md5"
-  notify: restart postgresql
-
-- name: Start and Enable PostgreSQL Service
-  systemd:
-    name: "{{ pg_service }}"
-    state: started
-    enabled: yes
-
-
-
-
----
-- name: restart postgresql
-  systemd:
-    name: "{{ pg_service }}"
-    state: restarted
+    key: "{{ pg_gpg_key_url }}"
