@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # Daily System Utilization Report using SAR for the Last 7 Days on RHEL 8
-# Fetches Average, Highest, and Lowest CPU (User+System), Memory, and Disk Usage
+# Fetches Daily Average, Highest, and Lowest CPU (User+System) and Memory Utilization
 
 echo "Gathering daily system utilization data for the past 7 days..."
-echo "-------------------------------------------------------------"
+echo "--------------------------------------------------------------"
 
-# Function to calculate min, max, and average
+# Function to calculate min, max, and average per day
 calculate_stats() {
     local data=("$@")
     local total=0
@@ -26,32 +26,26 @@ calculate_stats() {
     echo "Average: $avg%, Highest: $max%, Lowest: $min%"
 }
 
-# Loop through the last 7 days
-for i in {1..7}; do
-    DATE=$(date --date="$i days ago" +%d)
-    SAR_FILE="/var/log/sa/sa$DATE"
+# Get the last 7 days
+for day in {1..7}; do
+    date=$(date --date="$day days ago" +%Y-%m-%d)
+    sar_file="/var/log/sa/sa$(date --date="$day days ago" +%d)"
 
-    if [[ -f "$SAR_FILE" ]]; then
-        echo -e "\n📅 **Date: $(date --date="$i days ago" +'%Y-%m-%d')**"
-        
-        # Collect CPU Utilization (User + System)
+    if [ -f "$sar_file" ]; then
+        echo -e "\n📅 **Date: $date**"
+
+        # Collect CPU (User + System) Utilization
         echo -e "\n🔹 **CPU Utilization (User + System) (%)**"
-        cpu_usage=($(sar -u -f "$SAR_FILE" | awk '/[0-9]/ {print $3 + $5}'))
+        cpu_usage=($(sar -u -f "$sar_file" | awk '/^[0-9]/ {print $3 + $5}'))
         calculate_stats "${cpu_usage[@]}"
 
         # Collect Memory Utilization
         echo -e "\n🔹 **Memory Utilization (%)**"
-        memory_usage=($(sar -r -f "$SAR_FILE" | awk '/[0-9]/ {print ($3+$4)/($2+$3+$4) * 100}'))
+        memory_usage=($(sar -r -f "$sar_file" | awk '/^[0-9]/ {print ($3+$4)/($2+$3+$4) * 100}'))
         calculate_stats "${memory_usage[@]}"
 
-        # Collect Disk Utilization (I/O Wait)
-        echo -e "\n🔹 **Disk I/O Wait (%)**"
-        disk_io=($(sar -d -f "$SAR_FILE" | awk '/[0-9]/ {print $9}'))
-        calculate_stats "${disk_io[@]}"
-
-        echo "-------------------------------------------------------------"
     else
-        echo -e "\n📅 **Date: $(date --date="$i days ago" +'%Y-%m-%d')** - No SAR data available."
+        echo -e "\n📅 **Date: $date** - No SAR data available."
     fi
 done
 
