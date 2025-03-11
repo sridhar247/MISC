@@ -19,15 +19,18 @@ for i in {1..7}; do
         # Extract percentage memory used directly from sar -r (last column is %memused)
         MEM_USED=$(sar -r -f "$SA_FILE" | awk 'NR>3 {print $(NF)}' | tail -1)
 
-        # Validate that CPU and Memory data are not empty
+        # Validate that CPU and Memory data are not empty and that MEM_USED is a valid number
         if [ -n "$CPU_DATA" ] && [[ "$MEM_USED" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
             # Compute CPU statistics
             CPU_MAX=$(echo "$CPU_DATA" | sort -nr | head -1)
             CPU_MIN=$(echo "$CPU_DATA" | sort -n | head -1)
             CPU_AVG=$(echo "$CPU_DATA" | awk '{sum+=$1} END {if (NR>0) print sum/NR}')
 
+            # Ensure proper formatting for memory usage with percentage symbol
+            MEM_USED=$(printf "%.2f" "$MEM_USED")
+
             # Display results using proper formatting
-            printf "%s  %.2f       %.2f       %.2f       %.2f\n" \
+            printf "%s  %.2f%%       %.2f%%       %.2f%%       %.2f%%\n" \
                 "$DATE_LABEL" "$CPU_MAX" "$CPU_MIN" "$CPU_AVG" "$MEM_USED"
         else
             echo "$DATE_LABEL  No data available"
