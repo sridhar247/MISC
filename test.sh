@@ -7,7 +7,7 @@ echo "============================================================="
 echo "📊 Daily System Utilization Report (Last 7 Days)"
 echo "============================================================="
 
-# Function to calculate the average utilization from sar data
+# Function to calculate the average utilization
 calculate_average() {
     local data=("$@")
     local total=0
@@ -34,15 +34,15 @@ for i in {1..7}; do
     if [[ -f "$SAR_FILE" ]]; then
         echo -e "\n📅 **Date: $(date --date="$i days ago" +'%Y-%m-%d')**"
         echo "-------------------------------------------------------------"
-        
+
         # Collect CPU Utilization (User + System)
         echo -e "\n🔹 **CPU Utilization (User + System) (%)**"
-        cpu_usage=($(sar -u -f "$SAR_FILE" | awk '/^[0-9]/ {print $3 + $5}'))
+        cpu_usage=($(sar -u -f "$SAR_FILE" | awk '/^[0-9]/ {print $3 + $4}'))
         calculate_average "${cpu_usage[@]}"
 
         # Collect Memory Utilization
         echo -e "\n🔹 **Memory Utilization (%)**"
-        memory_usage=($(sar -r -f "$SAR_FILE" | awk '/^[0-9]/ {print ($3+$4)/($2+$3+$4) * 100}'))
+        memory_usage=($(sar -r -f "$SAR_FILE" | awk '/^[0-9]/ && $2 > 0 {print (($3+$4)/$2) * 100}'))
         calculate_average "${memory_usage[@]}"
 
         echo "-------------------------------------------------------------"
