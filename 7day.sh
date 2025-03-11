@@ -1,12 +1,10 @@
 #!/bin/bash
-# Script to extract and sort percentage memory used (%memused) for the past 7 days
+# Script to extract and display 7-day memory utilization (%memused) from SAR logs
 
 SA_DIR="/var/log/sa"
 
-echo "Date        Memory Used (%)"
-echo "---------------------------"
-
-TEMP_FILE=$(mktemp)
+echo "Date        Avg Memory Used (%)"
+echo "-------------------------------"
 
 # Loop over the past 7 days
 for i in {1..7}; do
@@ -18,20 +16,14 @@ for i in {1..7}; do
         # Extract and compute average %memused for the day
         MEM_AVG_DAY=$(sar -r -f "$SA_FILE" | awk 'NR>3 {sum+=$NF; count+=1} END {if (count>0) print sum/count}')
 
-        # Validate memory data and store in temp file for sorting
+        # Validate memory data and print result
         if [[ "$MEM_AVG_DAY" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
             MEM_AVG_DAY=$(printf "%.2f" "$MEM_AVG_DAY")
-            echo "$MEM_AVG_DAY $DATE_LABEL" >> "$TEMP_FILE"
+            printf "%s  %s%%\n" "$DATE_LABEL" "$MEM_AVG_DAY"
         else
-            echo "No data available for $DATE_LABEL"
+            echo "$DATE_LABEL  No data available"
         fi
     else
-        echo "SAR file not found for $DATE_LABEL"
+        echo "$DATE_LABEL  SAR file not found"
     fi
 done
-
-# Sort memory usage from highest to lowest and display it
-sort -nr "$TEMP_FILE" | awk '{printf "%s  %s%%\n", $2, $1}'
-
-# Cleanup temporary file
-rm -f "$TEMP_FILE"
