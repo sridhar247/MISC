@@ -42,7 +42,7 @@ for i in {1..7}; do
 
         # Collect Memory Utilization
         echo -e "\n🔹 **Memory Utilization (%)**"
-        memory_usage=($(sar -r -f "$SAR_FILE" | awk '/^[0-9]/ && $2 > 0 {print (($3+$4)/$2) * 100}'))
+        memory_usage=($(sar -r -f "$SAR_FILE" | awk '/^[0-9]/ && $2 > 0 {print ($3 / $2) * 100}'))
         calculate_average "${memory_usage[@]}"
 
         echo "-------------------------------------------------------------"
