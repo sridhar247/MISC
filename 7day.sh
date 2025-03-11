@@ -16,8 +16,8 @@ for i in {1..7}; do
         # Extract CPU utilization (100 - %idle)
         CPU_DATA=$(sar -u -f "$SA_FILE" | awk 'NR>3 {print 100 - $NF}')
 
-        # Extract Memory Utilization: Compute Used Memory Percentage
-        MEM_USED=$(sar -r -f "$SA_FILE" | awk 'NR>3 && $2 > 0 {print ($3 / $2) * 100}' | tail -1)
+        # Extract Total Memory and Used Memory, then calculate percentage used
+        MEM_USED=$(sar -r -f "$SA_FILE" | awk 'NR>3 {total=$2; used=$3} END {if (total > 0) print (used / total) * 100}')
 
         # Validate that CPU and Memory data are not empty
         if [ -n "$CPU_DATA" ] && [ -n "$MEM_USED" ]; then
