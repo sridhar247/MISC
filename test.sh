@@ -1,23 +1,36 @@
 #!/bin/bash
+# This script prints a snapshot of system+user CPU and memory utilization using sar on RHEL8
 
-echo -e "Date\t\tAvg CPU%\tMax CPU%\tMin CPU%"
+# Capture a one-time CPU utilization sample (sar -u 1 1)
+# The output line should look similar to:
+# 12:00:02 AM     all      3.00      0.00      1.50      0.10      0.00     95.40
+cpu_line=$(sar -u 1 1 | tail -n 1)
+if [[ -z "$cpu_line" ]]; then
+    echo "No CPU data available."
+    exit 1
+fi
 
-for i in {1..7}; do
-    # Get the date for past i days
-    DATE=$(date --date="$i days ago" +"%Y-%m-%d")
-    SAR_FILE="/var/log/sa/sa$(date --date="$i days ago" +%d)"
+# Extract %user (column 3) and %system (column 5) values and calculate total CPU usage
+cpu_user=$(echo "$cpu_line" | awk '{print $3}')
+cpu_system=$(echo "$cpu_line" | awk '{print $5}')
+cpu_total=$(echo "$cpu_user + $cpu_system" | bc -l)
 
-    # Check if SAR log file exists
-    if [[ -f "$SAR_FILE" ]]; then
-        # Extract CPU Utilization (User + System)
-        CPU_VALUES=$(sar -u -f "$SAR_FILE" | awk 'NR>3 {print $3 + $5}')
-        CPU_AVG=$(echo "$CPU_VALUES" | awk '{sum+=$1; count+=1} END {if(count>0) print sum/count; else print "N/A"}')
-        CPU_MAX=$(echo "$CPU_VALUES" | sort -nr | head -1)
-        CPU_MIN=$(echo "$CPU_VALUES" | sort -n | head -1)
+# Capture a one-time Memory utilization sample (sar -r 1 1)
+# The output line should look similar to:
+# 12:00:02 AM    100000    200000      66.67      2000     50000     150000       50.00
+mem_line=$(sar -r 1 1 | tail -n 1)
+if [[ -z "$mem_line" ]]; then
+    echo "No Memory data available."
+    exit 1
+fi
 
-        # Print results in tabular format
-        echo -e "$DATE\t$CPU_AVG%\t$CPU_MAX%\t$CPU_MIN%"
-    else
-        echo -e "$DATE\tNo Data Available"
-    fi
-done
+# Extract the %memused value.
+# Considering the typical output, column 4 holds the %memused.
+mem_usage=$(echo "$mem_line" | awk '{print $4}')
+
+# Print the results in a clean format
+echo "------------------------------------------"
+echo "      System+User CPU and Memory Utilization"
+echo "------------------------------------------"
+printf "CPU Utilization (User + System): %.2f%%\n" "$cpu_total"
+printf "Memory Utilization: %s%%\n" "$mem_usage"
