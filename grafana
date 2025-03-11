@@ -1,0 +1,50 @@
+---
+- name: Install and Configure Grafana on RHEL 8
+  hosts: grafana_servers
+  become: yes
+  vars:
+    grafana_version: "latest"
+    grafana_repo: "https://packages.grafana.com/oss/rpm"
+    grafana_service: "grafana-server"
+
+  tasks:
+    - name: Ensure required dependencies are installed
+      yum:
+        name:
+          - yum-utils
+          - gnupg2
+        state: present
+
+    - name: Add Grafana repository
+      get_url:
+        url: "{{ grafana_repo }}/grafana.repo"
+        dest: "/etc/yum.repos.d/grafana.repo"
+
+    - name: Install Grafana
+      yum:
+        name: "grafana"
+        state: present
+
+    - name: Enable and start Grafana service
+      systemd:
+        name: "{{ grafana_service }}"
+        enabled: yes
+        state: started
+
+    - name: Allow Grafana port (3000) through the firewall
+      firewalld:
+        service: grafana
+        permanent: yes
+        immediate: yes
+        state: enabled
+      ignore_errors: yes
+
+    - name: Open Grafana port manually if firewalld rule fails
+      shell: firewall-cmd --add-port=3000/tcp --permanent && firewall-cmd --reload
+      when: ansible_distribution == "RedHat"
+      ignore_errors: yes
+
+    - name: Display Grafana access URL
+      debug:
+        msg: "Grafana is installed. Access it at http://{{ ansible_host }}:3000"
+
