@@ -1,55 +1,36 @@
 #!/bin/bash
+# This script displays the average CPU utilization for each of the past 7 days.
+# It uses the SAR log files stored in /var/log/sa/saDD (where DD is the day of month)
+# and computes CPU utilization as (100 - average %idle) from the sar -u report.
+#
+# Note: Adjust the script if your SAR files or output format differs.
 
-# System Utilization Report using SAR for the Last 7 Days on RHEL 8
-# Fetches Average CPU (User+System) and Memory Utilization per Day
+SA_DIR="/var/log/sa"
 
-echo "============================================================="
-echo "📊 Daily System Utilization Report (Last 7 Days)"
-echo "============================================================="
+echo "Date        CPU Utilization (%)"
+echo "-------------------------------"
 
-# Function to calculate the average utilization
-calculate_average() {
-    local data=("$@")
-    local total=0
-    local count=${#data[@]}
-
-    if [[ $count -eq 0 ]]; then
-        echo "No data available."
-        return
-    fi
-
-    for value in "${data[@]}"; do
-        total=$(echo "$total + $value" | bc)
-    done
-
-    avg=$(echo "scale=2; $total / $count" | bc)
-    echo "📊 Average Utilization: $avg%"
-}
-
-# Loop through the last 7 days
+# Loop over the past 7 days (excluding today)
 for i in {1..7}; do
-    DATE=$(date --date="$i days ago" +%d)
-    SAR_FILE="/var/log/sa/sa$DATE"
-
-    if [[ -f "$SAR_FILE" ]]; then
-        echo -e "\n📅 **Date: $(date --date="$i days ago" +'%Y-%m-%d')**"
-        echo "-------------------------------------------------------------"
-
-        # Collect CPU Utilization (User + System)
-        echo -e "\n🔹 **CPU Utilization (User + System) (%)**"
-        cpu_usage=($(sar -u -f "$SAR_FILE" | awk '/^[0-9]/ {print $3 + $4}'))
-        calculate_average "${cpu_usage[@]}"
-
-        # Collect Memory Utilization
-        echo -e "\n🔹 **Memory Utilization (%)**"
-        memory_usage=($(sar -r -f "$SAR_FILE" | awk '/^[0-9]/ && $2 > 0 {print ($3 / $2) * 100}'))
-        calculate_average "${memory_usage[@]}"
-
-        echo "-------------------------------------------------------------"
+    # Get day (in 2-digit format) for the file name and date label
+    DAY=$(date --date="$i day ago" +%d)
+    DATE_LABEL=$(date --date="$i day ago" +%Y-%m-%d)
+    SA_FILE="$SA_DIR/sa$DAY"
+    
+    if [ -f "$SA_FILE" ]; then
+        # Use sar to display CPU stats from the log file.
+        # The "Average:" line contains the summary for the day.
+        # We assume the last field is %idle.
+        AVG_IDLE=$(sar -u -f "$SA_FILE" | awk '/^Average:/ {print $(NF)}')
+        
+        if [ -z "$AVG_IDLE" ]; then
+            echo "$DATE_LABEL  No data available"
+        else
+            # Calculate CPU utilization as (100 - %idle)
+            UTIL=$(echo "scale=2; 100 - $AVG_IDLE" | bc)
+            printf "%s  %.2f\n" "$DATE_LABEL" "$UTIL"
+        fi
     else
-        echo -e "\n📅 **Date: $(date --date="$i days ago" +'%Y-%m-%d')** - ❌ No SAR data available."
+        echo "$DATE_LABEL  SAR file not found"
     fi
 done
-
-echo -e "\n✅ **Daily Report Generated Successfully!**"
-echo "============================================================="
