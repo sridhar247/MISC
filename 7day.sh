@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script to extract and display 7-day memory utilization (%memused) from SAR logs
+# Script to extract and display %memory used from SAR logs for the past 7 days
 
 SA_DIR="/var/log/sa"
 
@@ -13,7 +13,7 @@ for i in {1..7}; do
     SA_FILE="$SA_DIR/sa$DAY"
 
     if [ -f "$SA_FILE" ]; then
-        # Extract and compute average %memused for the day
+        # Extract and compute %memused directly from SAR
         MEM_AVG_DAY=$(sar -r -f "$SA_FILE" | awk 'NR>3 {sum+=$NF; count+=1} END {if (count>0) print sum/count}')
 
         # Validate memory data and print result
