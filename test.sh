@@ -16,8 +16,8 @@ for i in {1..7}; do
         # Extract CPU utilization (100 - %idle)
         CPU_DATA=$(sar -u -f "$SA_FILE" | awk 'NR>3 {print 100 - $NF}')
         
-        # Extract Memory utilization (%memory used = (kbmemused / kbmemtotal) * 100)
-        MEM_DATA=$(sar -r -f "$SA_FILE" | awk 'NR>3 {print ($4 / ($2+$4)) * 100}')
+        # Extract Memory utilization correctly
+        MEM_DATA=$(sar -r -f "$SA_FILE" | awk 'NR>3 && $2 > 0 {print ($3 / $2) * 100}')
 
         if [ -n "$CPU_DATA" ] && [ -n "$MEM_DATA" ]; then
             # Compute CPU statistics
