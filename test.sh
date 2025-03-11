@@ -26,6 +26,8 @@ for i in {1..7}; do
         if [ -z "$AVG_IDLE" ]; then
             echo "$DATE_LABEL  No data available"
         else
+            # Convert comma to dot if necessary (e.g., "99,60" -> "99.60")
+            AVG_IDLE=$(echo "$AVG_IDLE" | tr ',' '.')
             # Calculate CPU utilization as (100 - %idle)
             UTIL=$(echo "scale=2; 100 - $AVG_IDLE" | bc)
             printf "%s  %.2f\n" "$DATE_LABEL" "$UTIL"
