@@ -1,38 +1,29 @@
 #!/bin/bash
-# This script displays the average CPU utilization for each of the past 7 days.
-# It uses the SAR log files stored in /var/log/sa/saDD (where DD is the day of month)
-# and computes CPU utilization as (100 - average %idle) from the sar -u report.
-#
-# Note: Adjust the script if your SAR files or output format differs.
+# Script to calculate max, min, and average CPU utilization (excluding %idle) on RHEL 8
 
-SA_DIR="/var/log/sa"
+# Check if sar command is available
+if ! command -v sar &> /dev/null; then
+    echo "Error: sysstat package is not installed. Install it using: sudo yum install sysstat"
+    exit 1
+fi
 
-echo "Date        CPU Utilization (%)"
-echo "-------------------------------"
+# Get CPU utilization from sar (excluding %idle)
+CPU_DATA=$(sar -u 1 5 | awk 'NR>3 {print 100 - $NF}')
 
-# Loop over the past 7 days (excluding today)
-for i in {1..7}; do
-    # Get day (in 2-digit format) for the file name and date label
-    DAY=$(date --date="$i day ago" +%d)
-    DATE_LABEL=$(date --date="$i day ago" +%Y-%m-%d)
-    SA_FILE="$SA_DIR/sa$DAY"
-    
-    if [ -f "$SA_FILE" ]; then
-        # Use sar to display CPU stats from the log file.
-        # The "Average:" line contains the summary for the day.
-        # We assume the last field is %idle.
-        AVG_IDLE=$(sar -u -f "$SA_FILE" | awk '/^Average:/ {print $(NF)}')
-        
-        if [ -z "$AVG_IDLE" ]; then
-            echo "$DATE_LABEL  No data available"
-        else
-            # Convert comma to dot if necessary (e.g., "99,60" -> "99.60")
-            AVG_IDLE=$(echo "$AVG_IDLE" | tr ',' '.')
-            # Calculate CPU utilization as (100 - %idle)
-            UTIL=$(echo "scale=2; 100 - $AVG_IDLE" | bc)
-            printf "%s  %.2f\n" "$DATE_LABEL" "$UTIL"
-        fi
-    else
-        echo "$DATE_LABEL  SAR file not found"
-    fi
-done
+# Check if data is available
+if [ -z "$CPU_DATA" ]; then
+    echo "Error: No CPU utilization data available."
+    exit 1
+fi
+
+# Calculate min, max, and average utilization
+MAX_UTIL=$(echo "$CPU_DATA" | sort -nr | head -1)
+MIN_UTIL=$(echo "$CPU_DATA" | sort -n | head -1)
+AVG_UTIL=$(echo "$CPU_DATA" | awk '{sum+=$1} END {if (NR>0) print sum/NR}')
+
+# Display the results
+echo "CPU Utilization Statistics (excluding %idle):"
+echo "--------------------------------------------"
+echo "Maximum Utilization: $MAX_UTIL %"
+echo "Minimum Utilization: $MIN_UTIL %"
+echo "Average Utilization: $AVG_UTIL %"
