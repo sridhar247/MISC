@@ -1,1 +1,36 @@
-READ
+#!/bin/bash
+# Script to display current system metrics using sar on RHEL8
+
+# Check if sar command is available
+if ! command -v sar >/dev/null 2>&1; then
+  echo "Error: 'sar' command not found. Please install the sysstat package."
+  exit 1
+fi
+
+# Define sampling interval and count (1 sample after a 1-second delay)
+INTERVAL=1
+COUNT=1
+
+echo "==== Current Overall CPU Utilization ===="
+# The output shows %user, %system, %idle, etc.
+sar -u $INTERVAL $COUNT | tail -n 1
+
+echo ""
+echo "==== Per-CPU Utilization ===="
+sar -P ALL $INTERVAL $COUNT | tail -n 1
+
+echo ""
+echo "==== Memory Utilization ===="
+# Displays used, free, and buffer/cache memory stats
+sar -r $INTERVAL $COUNT | tail -n 1
+
+echo ""
+echo "==== Disk I/O Statistics ===="
+# Shows metrics like transfers per second, etc.
+sar -d $INTERVAL $COUNT | tail -n 1
+
+echo ""
+echo "==== Run Queue and Load Average (Proxy for Thread Utilization) ===="
+# This output shows the run queue length and load averages which can indicate thread/process demand
+sar -q $INTERVAL $COUNT | tail -n 1
+
