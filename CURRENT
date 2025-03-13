@@ -1,98 +1,63 @@
 #!/bin/bash
-# Script to calculate average, max, and min CPU, thread, memory, swap, and disk utilization
-# for the current day using SAR on a RHEL8 server.
+# Script to calculate current CPU utilization, thread (run queue) usage,
+# memory usage, and swap usage on a RHEL8 server in tabular form.
 
-# Determine the current day file (e.g., /var/log/sa/sa05 for the 5th day of the month)
-DAY=$(date +%d)
-SA_FILE="/var/log/sa/sa${DAY}"
-
-if [ ! -f "$SA_FILE" ]; then
-    echo "SAR data file $SA_FILE not found. Ensure sysstat is installed and SAR is running."
-    exit 1
+# Check for required commands: sar and free
+if ! command -v sar >/dev/null 2>&1; then
+  echo "Error: 'sar' not installed. Please install the sysstat package."
+  exit 1
 fi
 
-echo "System Utilization Stats for Current Day ($(date)):"
-echo "-----------------------------------------------------"
-printf "%-15s %10s %10s %10s\n" "Metric" "Average" "Max" "Min"
-echo "-----------------------------------------------------"
+if ! command -v free >/dev/null 2>&1; then
+  echo "Error: 'free' command not available."
+  exit 1
+fi
 
-#-------------------------------
-# CPU Utilization: use sar -u and compute 100 - %idle (field 8)
-#-------------------------------
-cpu_stats=$(sar -u -f "$SA_FILE" | awk '/^[0-9]/ {
-    val = 100 - $8;
-    sum += val; count++;
-    if (count==1) { max = val; min = val; }
-    else {
-        if (val > max) { max = val; }
-        if (val < min) { min = val; }
-    }
-} END { if(count>0) printf "%.2f %.2f %.2f", sum/count, max, min; }')
-read cpu_avg cpu_max cpu_min <<< "$cpu_stats"
-printf "%-15s %10s %10s %10s\n" "CPU(%)" "$cpu_avg" "$cpu_max" "$cpu_min"
+# Use a sampling interval of 1 second and count 2 so the latest data is captured.
+INTERVAL=1
+COUNT=2
 
-#-------------------------------
-# Thread Utilization: using run queue size from sar -q (field 2)
-#-------------------------------
-thread_stats=$(sar -q -f "$SA_FILE" | awk '/^[0-9]/ {
-    val = $2;
-    sum += val; count++;
-    if (count==1) { max = val; min = val; }
-    else {
-        if (val > max) { max = val; }
-        if (val < min) { min = val; }
-    }
-} END { if(count>0) printf "%.2f %.2f %.2f", sum/count, max, min; }')
-read thread_avg thread_max thread_min <<< "$thread_stats"
-printf "%-15s %10s %10s %10s\n" "Thread" "$thread_avg" "$thread_max" "$thread_min"
+#-----------------------
+# CPU Utilization
+#-----------------------
+# Capture sar output and use the second (latest) sample.
+cpu_line=$(sar -u $INTERVAL $COUNT | tail -n 1)
+# The last column is %idle; CPU utilization is calculated as 100 - %idle.
+idle=$(echo "$cpu_line" | awk '{print $NF}')
+cpu_util=$(awk -v idle="$idle" 'BEGIN {printf "%.2f", 100 - idle}')
 
-#-------------------------------
-# Memory Utilization: using %memused from sar -r (field 4)
-#-------------------------------
-mem_stats=$(sar -r -f "$SA_FILE" | awk '/^[0-9]/ {
-    val = $4;
-    sum += val; count++;
-    if (count==1) { max = val; min = val; }
-    else {
-        if (val > max) { max = val; }
-        if (val < min) { min = val; }
-    }
-} END { if(count>0) printf "%.2f %.2f %.2f", sum/count, max, min; }')
-read mem_avg mem_max mem_min <<< "$mem_stats"
-printf "%-15s %10s %10s %10s\n" "Memory(%)" "$mem_avg" "$mem_max" "$mem_min"
+#-----------------------
+# Thread Usage (Run Queue)
+#-----------------------
+# Use sar -q to obtain run queue size.
+thread_line=$(sar -q $INTERVAL $COUNT | tail -n 1)
+# The second column is the run queue size (number of processes/threads waiting for CPU time).
+runq=$(echo "$thread_line" | awk '{print $2}')
 
-#-------------------------------
-# Swap Utilization: using %swpused from sar -S (field 3)
-#-------------------------------
-swap_stats=$(sar -S -f "$SA_FILE" | awk '/^[0-9]/ {
-    val = $3;
-    sum += val; count++;
-    if (count==1) { max = val; min = val; }
-    else {
-        if (val > max) { max = val; }
-        if (val < min) { min = val; }
-    }
-} END { if(count>0) printf "%.2f %.2f %.2f", sum/count, max, min; }')
-read swap_avg swap_max swap_min <<< "$swap_stats"
-printf "%-15s %10s %10s %10s\n" "Swap(%)" "$swap_avg" "$swap_max" "$swap_min"
+#-----------------------
+# Memory and Swap Usage
+#-----------------------
+# Use free -m for memory and swap values.
+# For memory: extract total and used memory from the "Mem:" line.
+read mem_total mem_used _ <<< $(free -m | awk '/^Mem:/ {print $2, $3, $4}')
+# Calculate memory usage percentage.
+mem_usage=$(awk -v total="$mem_total" -v used="$mem_used" 'BEGIN {printf "%.2f", (used/total)*100}')
 
-#-------------------------------
-# Disk Utilization: using %util from sar -d (field 10) per device
-#-------------------------------
-# Get unique disk devices from the SAR data
-devices=$(sar -d -f "$SA_FILE" | awk '/^[0-9]/ {print $2}' | sort | uniq)
-for dev in $devices; do
-    disk_stats=$(sar -d -f "$SA_FILE" | awk -v device="$dev" '$2==device {
-        val = $10;
-        sum += val; count++;
-        if (count==1) { max = val; min = val; }
-        else {
-            if (val > max) { max = val; }
-            if (val < min) { min = val; }
-        }
-    } END { if(count>0) printf "%.2f %.2f %.2f", sum/count, max, min; }')
-    read disk_avg disk_max disk_min <<< "$disk_stats"
-    printf "%-15s %10s %10s %10s\n" "Disk($dev)" "$disk_avg" "$disk_max" "$disk_min"
-done
+# For swap: extract total and used swap from the "Swap:" line.
+read swap_total swap_used _ <<< $(free -m | awk '/^Swap:/ {print $2, $3, $4}')
+if [ "$swap_total" -gt 0 ]; then
+  swap_usage=$(awk -v total="$swap_total" -v used="$swap_used" 'BEGIN {printf "%.2f", (used/total)*100}')
+else
+  swap_usage="0.00"
+fi
 
-echo "-----------------------------------------------------"
+#-----------------------
+# Print Results in Tabular Format
+#-----------------------
+printf "\n%-25s %-15s\n" "Metric" "Value"
+printf "%-25s %-15s\n" "-------------------------" "---------------"
+printf "%-25s %-15s\n" "CPU Utilization (%)" "$cpu_util"
+printf "%-25s %-15s\n" "Run Queue (Threads)" "$runq"
+printf "%-25s %-15s\n" "Memory Usage (%)" "$mem_usage"
+printf "%-25s %-15s\n" "Swap Usage (%)" "$swap_usage"
+printf "\n"
