@@ -1,44 +1,98 @@
 #!/bin/bash
-# Script to calculate current CPU, Memory, and Disk utilization in tabular form on RHEL8
+# Script to calculate average, max, and min CPU, thread, memory, swap, and disk utilization
+# for the current day using SAR on a RHEL8 server.
 
-# Check if the 'sar' command is available
-if ! command -v sar >/dev/null 2>&1; then
-  echo "Error: 'sar' command not found. Please install the sysstat package."
-  exit 1
+# Determine the current day file (e.g., /var/log/sa/sa05 for the 5th day of the month)
+DAY=$(date +%d)
+SA_FILE="/var/log/sa/sa${DAY}"
+
+if [ ! -f "$SA_FILE" ]; then
+    echo "SAR data file $SA_FILE not found. Ensure sysstat is installed and SAR is running."
+    exit 1
 fi
 
-# Set sampling interval and count.
-# Using COUNT=2 helps ensure a current sample (first sample may be from boot time)
-INTERVAL=1
-COUNT=2
+echo "System Utilization Stats for Current Day ($(date)):"
+echo "-----------------------------------------------------"
+printf "%-15s %10s %10s %10s\n" "Metric" "Average" "Max" "Min"
+echo "-----------------------------------------------------"
 
-echo "=================== System Utilization Report ==================="
-echo ""
+#-------------------------------
+# CPU Utilization: use sar -u and compute 100 - %idle (field 8)
+#-------------------------------
+cpu_stats=$(sar -u -f "$SA_FILE" | awk '/^[0-9]/ {
+    val = 100 - $8;
+    sum += val; count++;
+    if (count==1) { max = val; min = val; }
+    else {
+        if (val > max) { max = val; }
+        if (val < min) { min = val; }
+    }
+} END { if(count>0) printf "%.2f %.2f %.2f", sum/count, max, min; }')
+read cpu_avg cpu_max cpu_min <<< "$cpu_stats"
+printf "%-15s %10s %10s %10s\n" "CPU(%)" "$cpu_avg" "$cpu_max" "$cpu_min"
 
-# CPU Utilization
-echo ">> CPU Utilization:"
-cpu_output=$(sar -u $INTERVAL $COUNT)
-cpu_header=$(echo "$cpu_output" | head -n 1)
-cpu_data=$(echo "$cpu_output" | tail -n 1)
-echo "$cpu_header"
-echo "$cpu_data" | column -t
-echo ""
+#-------------------------------
+# Thread Utilization: using run queue size from sar -q (field 2)
+#-------------------------------
+thread_stats=$(sar -q -f "$SA_FILE" | awk '/^[0-9]/ {
+    val = $2;
+    sum += val; count++;
+    if (count==1) { max = val; min = val; }
+    else {
+        if (val > max) { max = val; }
+        if (val < min) { min = val; }
+    }
+} END { if(count>0) printf "%.2f %.2f %.2f", sum/count, max, min; }')
+read thread_avg thread_max thread_min <<< "$thread_stats"
+printf "%-15s %10s %10s %10s\n" "Thread" "$thread_avg" "$thread_max" "$thread_min"
 
-# Memory Utilization
-echo ">> Memory Utilization:"
-mem_output=$(sar -r $INTERVAL $COUNT)
-mem_header=$(echo "$mem_output" | head -n 1)
-mem_data=$(echo "$mem_output" | tail -n 1)
-echo "$mem_header"
-echo "$mem_data" | column -t
-echo ""
+#-------------------------------
+# Memory Utilization: using %memused from sar -r (field 4)
+#-------------------------------
+mem_stats=$(sar -r -f "$SA_FILE" | awk '/^[0-9]/ {
+    val = $4;
+    sum += val; count++;
+    if (count==1) { max = val; min = val; }
+    else {
+        if (val > max) { max = val; }
+        if (val < min) { min = val; }
+    }
+} END { if(count>0) printf "%.2f %.2f %.2f", sum/count, max, min; }')
+read mem_avg mem_max mem_min <<< "$mem_stats"
+printf "%-15s %10s %10s %10s\n" "Memory(%)" "$mem_avg" "$mem_max" "$mem_min"
 
-# Disk Utilization
-echo ">> Disk I/O Utilization:"
-disk_output=$(sar -d $INTERVAL $COUNT)
-disk_header=$(echo "$disk_output" | head -n 1)
-disk_data=$(echo "$disk_output" | tail -n 1)
-echo "$disk_header"
-echo "$disk_data" | column -t
-echo ""
-echo "=================================================================="
+#-------------------------------
+# Swap Utilization: using %swpused from sar -S (field 3)
+#-------------------------------
+swap_stats=$(sar -S -f "$SA_FILE" | awk '/^[0-9]/ {
+    val = $3;
+    sum += val; count++;
+    if (count==1) { max = val; min = val; }
+    else {
+        if (val > max) { max = val; }
+        if (val < min) { min = val; }
+    }
+} END { if(count>0) printf "%.2f %.2f %.2f", sum/count, max, min; }')
+read swap_avg swap_max swap_min <<< "$swap_stats"
+printf "%-15s %10s %10s %10s\n" "Swap(%)" "$swap_avg" "$swap_max" "$swap_min"
+
+#-------------------------------
+# Disk Utilization: using %util from sar -d (field 10) per device
+#-------------------------------
+# Get unique disk devices from the SAR data
+devices=$(sar -d -f "$SA_FILE" | awk '/^[0-9]/ {print $2}' | sort | uniq)
+for dev in $devices; do
+    disk_stats=$(sar -d -f "$SA_FILE" | awk -v device="$dev" '$2==device {
+        val = $10;
+        sum += val; count++;
+        if (count==1) { max = val; min = val; }
+        else {
+            if (val > max) { max = val; }
+            if (val < min) { min = val; }
+        }
+    } END { if(count>0) printf "%.2f %.2f %.2f", sum/count, max, min; }')
+    read disk_avg disk_max disk_min <<< "$disk_stats"
+    printf "%-15s %10s %10s %10s\n" "Disk($dev)" "$disk_avg" "$disk_max" "$disk_min"
+done
+
+echo "-----------------------------------------------------"
