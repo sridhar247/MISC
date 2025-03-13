@@ -1,6 +1,6 @@
 #!/bin/bash
 # Script to calculate current CPU utilization, thread (run queue) usage,
-# memory usage, and swap usage on a RHEL8 server in tabular form.
+# memory usage, and swap usage on a RHEL8 server in tabular form with date.
 
 # Check for required commands: sar and free
 if ! command -v sar >/dev/null 2>&1; then
@@ -52,9 +52,12 @@ else
 fi
 
 #-----------------------
-# Print Results in Tabular Format
+# Print Results in Tabular Format with Date
 #-----------------------
-printf "\n%-25s %-15s\n" "Metric" "Value"
+current_date=$(date +"%Y-%m-%d %H:%M:%S")
+echo -e "\nSystem Utilization Report as of $current_date\n"
+
+printf "%-25s %-15s\n" "Metric" "Value"
 printf "%-25s %-15s\n" "-------------------------" "---------------"
 printf "%-25s %-15s\n" "CPU Utilization (%)" "$cpu_util"
 printf "%-25s %-15s\n" "Run Queue (Threads)" "$runq"
