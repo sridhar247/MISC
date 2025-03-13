@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script to display current system metrics using sar on RHEL8
+# Script to display current CPU, thread, memory, and disk utilization in tabular format on RHEL8 using sar
 
 # Check if sar command is available
 if ! command -v sar >/dev/null 2>&1; then
@@ -7,30 +7,52 @@ if ! command -v sar >/dev/null 2>&1; then
   exit 1
 fi
 
-# Define sampling interval and count (1 sample after a 1-second delay)
+# Set sampling interval and count. Using COUNT=2 helps capture a fresh sample.
 INTERVAL=1
-COUNT=1
+COUNT=2
 
-echo "==== Current Overall CPU Utilization ===="
-# The output shows %user, %system, %idle, etc.
-sar -u $INTERVAL $COUNT | tail -n 1
+# Get CPU overall utilization using sar -u
+cpu_output=$(sar -u $INTERVAL $COUNT)
+cpu_header=$(echo "$cpu_output" | head -n 1)
+cpu_data=$(echo "$cpu_output" | tail -n 1)
 
+# Get Thread Utilization (Run Queue and Load Average) using sar -q
+thread_output=$(sar -q $INTERVAL $COUNT)
+thread_header=$(echo "$thread_output" | head -n 1)
+thread_data=$(echo "$thread_output" | tail -n 1)
+
+# Get Memory Utilization using sar -r
+mem_output=$(sar -r $INTERVAL $COUNT)
+mem_header=$(echo "$mem_output" | head -n 1)
+mem_data=$(echo "$mem_output" | tail -n 1)
+
+# Get Disk I/O statistics using sar -d
+disk_output=$(sar -d $INTERVAL $COUNT)
+disk_header=$(echo "$disk_output" | head -n 1)
+disk_data=$(echo "$disk_output" | tail -n 1)
+
+# Print the results in a tabular format using the 'column' command
+echo "==================== System Utilization Report ===================="
 echo ""
-echo "==== Per-CPU Utilization ===="
-sar -P ALL $INTERVAL $COUNT | tail -n 1
 
+echo ">> CPU Utilization:"
+echo "$cpu_header"
+echo "$cpu_data" | column -t
 echo ""
-echo "==== Memory Utilization ===="
-# Displays used, free, and buffer/cache memory stats
-sar -r $INTERVAL $COUNT | tail -n 1
 
+echo ">> Thread Utilization (Run Queue & Load Average):"
+echo "$thread_header"
+echo "$thread_data" | column -t
 echo ""
-echo "==== Disk I/O Statistics ===="
-# Shows metrics like transfers per second, etc.
-sar -d $INTERVAL $COUNT | tail -n 1
 
+echo ">> Memory Utilization:"
+echo "$mem_header"
+echo "$mem_data" | column -t
 echo ""
-echo "==== Run Queue and Load Average (Proxy for Thread Utilization) ===="
-# This output shows the run queue length and load averages which can indicate thread/process demand
-sar -q $INTERVAL $COUNT | tail -n 1
 
+echo ">> Disk I/O Utilization:"
+echo "$disk_header"
+echo "$disk_data" | column -t
+echo ""
+
+echo "==================================================================="
