@@ -4,11 +4,15 @@
 # It reports:
 #   - CPU Utilization = 100 - average %idle (from sar -u)
 #   - Memory Usage = average %memused (from sar -r)
-#   - Disk Utilization (%util for device "sda" from sar -d)
+#   - Disk Utilization (%util for a specified disk device from sar -d)
 #
 # SAR log files are assumed to be located in /var/log/sa/ as saDD (where DD is day of month).
 #
-# Note: Adjust the device name (here “sda”) if your system uses a different disk identifier.
+# Note: Adjust the DISK_DEVICE variable if your system uses a different disk identifier.
+#
+
+# Set the disk device to monitor (change if necessary, e.g., nvme0n1, sda1, etc.)
+DISK_DEVICE="sda"
 
 OUTPUT="./historic_utilization.csv"
 
@@ -38,13 +42,11 @@ for i in {13..0}; do
     fi
 
     # --- Memory Usage ---
-    # We use sar -r to get memory statistics.
-    # To ensure we extract the average %memused value correctly,
-    # we first determine the column number for "%memused" from the header.
+    # Using sar -r, dynamically determine the column for "%memused".
     header=$(sar -r -f "$sar_file" | head -n 3 | grep "%memused")
-    col_num=4  # default to 4 if header parsing fails
+    col_num=4  # default column if header parsing fails
     if [ -n "$header" ]; then
-        col_num=$(echo "$header" | awk '{for(i=1;i<=NF;i++){if($i=="%memused"){print i; break}}}')
+        col_num=$(echo "$header" | awk '{for(i=1;i<=NF;i++){if($i=="%memused"){print i; exit}}}')
     fi
     mem_usage=$(sar -r -f "$sar_file" | awk -v col="$col_num" '/Average/ {print $col}')
     if [ -z "$mem_usage" ]; then
@@ -52,8 +54,9 @@ for i in {13..0}; do
     fi
 
     # --- Disk Utilization ---
-    # Using sar -d, extract the "Average:" line for device "sda"
-    disk_util=$(sar -d -f "$sar_file" | awk '$1=="Average:" && $2=="sda" {print $NF}')
+    # Using sar -d, search for the "Average:" line that mentions our disk device,
+    # then extract the last field (assumed to be the %util column).
+    disk_util=$(sar -d -f "$sar_file" | awk -v dev="$DISK_DEVICE" '$0 ~ "Average:" && $0 ~ dev {print $NF}')
     if [ -z "$disk_util" ]; then
         disk_util="N/A"
     fi
