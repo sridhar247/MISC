@@ -3,8 +3,9 @@
 #
 # This script supports two modes:
 #
-#   1. monitor  - Monitors the current day’s CPU and memory utilization at 10-minute intervals.
-#                 It logs a timestamp, hostname, CPU utilization (100 - %idle),
+#   1. monitor  - Monitors the current day’s CPU and memory utilization live for 5 minutes,
+#                 capturing data at 1-minute intervals.
+#                 It logs a timestamp (date and time), hostname, CPU utilization (100 - %idle),
 #                 memory utilization (% used), allocated CPUs, and allocated Memory (MB)
 #                 into a CSV file (current_day_utilization.csv).
 #
@@ -41,7 +42,7 @@ get_allocated_mem() {
 
 if [ "$MODE" == "monitor" ]; then
     # -------------------------------
-    # Current Day Monitoring (10-min intervals)
+    # Current Day Monitoring (1-min intervals for 5 minutes)
     # -------------------------------
     OUTPUT_FILE="current_day_utilization.csv"
     # Write header if file does not exist
@@ -49,14 +50,15 @@ if [ "$MODE" == "monitor" ]; then
         echo "Timestamp,Hostname,CPU Utilization (%),Memory Utilization (%),Allocated CPUs,Allocated Memory (MB)" > "$OUTPUT_FILE"
     fi
 
-    echo "Starting current day monitoring. Press Ctrl+C to exit."
+    echo "Starting live monitoring for 5 minutes at 1-minute intervals."
 
-    # Get hostname and allocated resources (assuming these remain constant during monitoring)
+    # Get hostname and allocated resources (assumed constant during monitoring)
     HOSTNAME=$(hostname)
     ALLOCATED_CPU=$(get_allocated_cpu)
     ALLOCATED_MEM=$(get_allocated_mem)
 
-    while true; do
+    # Monitor for 5 iterations (1 minute each)
+    for ((i=1; i<=5; i++)); do
         timestamp=$(date "+%Y-%m-%d %H:%M:%S")
 
         # Get CPU idle percentage using top and then compute utilization as 100 - idle.
@@ -74,9 +76,13 @@ if [ "$MODE" == "monitor" ]; then
         echo "$timestamp, $HOSTNAME, $cpu_util, $mem_usage, $ALLOCATED_CPU, $ALLOCATED_MEM" >> "$OUTPUT_FILE"
         echo "[$timestamp] Host: $HOSTNAME | CPU Utilization: $cpu_util% | Memory Utilization: $mem_usage% | Allocated CPUs: $ALLOCATED_CPU | Allocated Memory: ${ALLOCATED_MEM}MB"
 
-        # Sleep for 10 minutes (600 seconds)
-        sleep 600
+        # Sleep for 1 minute (60 seconds) before next measurement unless it's the last iteration
+        if [ $i -lt 5 ]; then
+            sleep 60
+        fi
     done
+
+    echo "Live monitoring complete. Data saved in $OUTPUT_FILE."
 
 elif [ "$MODE" == "report" ]; then
     # -------------------------------
