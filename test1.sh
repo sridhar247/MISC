@@ -3,10 +3,12 @@
 # This script extracts historical data from SAR log files for the last 14 days.
 # It reports:
 #   - CPU Utilization = 100 - average %idle (from sar -u)
-#   - Memory Usage (%memused from sar -r)
+#   - Memory Usage = average %memused (from sar -r)
 #   - Disk Utilization (%util for device "sda" from sar -d)
 #
 # SAR log files are assumed to be located in /var/log/sa/ as saDD (where DD is day of month).
+#
+# Note: Adjust the device name (here “sda”) if your system uses a different disk identifier.
 
 OUTPUT="./historic_utilization.csv"
 
@@ -28,7 +30,6 @@ for i in {13..0}; do
 
     # --- CPU Utilization ---
     # Get the average idle percentage from sar -u and compute 100 - idle.
-    # The "Average:" line in sar -u output typically has the idle percentage in the last column.
     cpu_idle=$(sar -u -f "$sar_file" | awk '/Average/ {print $NF}')
     if [ -z "$cpu_idle" ]; then
         cpu_util="N/A"
@@ -37,8 +38,15 @@ for i in {13..0}; do
     fi
 
     # --- Memory Usage ---
-    # Using sar -r, the "Average:" line reports %memused as the 4th field.
-    mem_usage=$(sar -r -f "$sar_file" | awk '/Average/ {print $4}')
+    # We use sar -r to get memory statistics.
+    # To ensure we extract the average %memused value correctly,
+    # we first determine the column number for "%memused" from the header.
+    header=$(sar -r -f "$sar_file" | head -n 3 | grep "%memused")
+    col_num=4  # default to 4 if header parsing fails
+    if [ -n "$header" ]; then
+        col_num=$(echo "$header" | awk '{for(i=1;i<=NF;i++){if($i=="%memused"){print i; break}}}')
+    fi
+    mem_usage=$(sar -r -f "$sar_file" | awk -v col="$col_num" '/Average/ {print $col}')
     if [ -z "$mem_usage" ]; then
         mem_usage="N/A"
     fi
